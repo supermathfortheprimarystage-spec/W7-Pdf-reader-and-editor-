@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>W7 PDF Reader and Editor</title>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<style>
+:root{--bg:#efe7ff;--bg2:#d8c4ff;--ink:#1e0b45;--mute:#6a4fa3;--card:linear-gradient(135deg,#ffffff8c,#ffffff33);--line:#7c3aed33;--edge:#ffffffb8;--acc:#7c3aed;--bar:linear-gradient(135deg,#ffffffa6,#ffffff59);--gl:blur(22px) saturate(180%);--sh:inset 0 1px 1px #ffffffcc,inset 0 -1px 2px #ffffff40,0 12px 32px #4c1d9540;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;--bg:#12062b;--bg2:#2a0c5e;--ink:#f6efff;--mute:#bda6f0;--card:linear-gradient(135deg,#ffffff2e,#ffffff0d);--line:#ffffff26;--edge:#ffffff3d;--bar:linear-gradient(135deg,#ffffff33,#ffffff12)}}
+:root[data-theme="dark"]{color-scheme:dark;--bg:#12062b;--bg2:#2a0c5e;--ink:#f6efff;--mute:#bda6f0;--card:linear-gradient(135deg,#ffffff2e,#ffffff0d);--line:#ffffff26;--edge:#ffffff3d;--bar:linear-gradient(135deg,#ffffff33,#ffffff12)}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{background:linear-gradient(135deg,var(--bg),var(--bg2));color:var(--ink);font-family:'Cairo',Tahoma,'Segoe UI',sans-serif;overflow:hidden}
+button{font:inherit;color:inherit;cursor:pointer;border:0;background:none}
+button:focus-visible,input:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
+#home{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:28px;padding:20px;overflow:hidden;transition:opacity .45s,transform .45s}
+#home.out{opacity:0;transform:scale(1.06);pointer-events:none}
+.blob{position:absolute;border-radius:50%;filter:blur(60px);opacity:.55;animation:fl 14s ease-in-out infinite alternate}
+.b1{width:42vmax;height:42vmax;background:#a855f7;top:-12vmax;right:-8vmax}
+.b2{width:38vmax;height:38vmax;background:#6d28d9;bottom:-14vmax;left:-8vmax;animation-delay:-5s}
+.b3{width:30vmax;height:30vmax;background:#e879f9;top:30%;left:35%;opacity:.35;animation-delay:-9s}
+@keyframes fl{to{transform:translate(6vmax,-5vmax) scale(1.2)}}
+h1{position:relative;margin:0;font-size:clamp(40px,9vw,88px);line-height:1.05;font-weight:800;letter-spacing:-1px;text-align:center;background:linear-gradient(135deg,#5b21b6,#a21caf 60%,#c026d3);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 8px 24px #7c3aed66)}
+.sub{position:relative;margin:-14px 0 0;color:var(--mute);font-size:18px}
+.cards{position:relative;display:flex;gap:22px;flex-wrap:wrap;justify-content:center}
+.card{width:min(300px,86vw);padding:30px 24px;border-radius:32px;background:var(--card);backdrop-filter:var(--gl);-webkit-backdrop-filter:var(--gl);border:1px solid var(--edge);box-shadow:var(--sh);text-align:center;transition:transform .25s cubic-bezier(.3,1.6,.5,1),box-shadow .25s}
+.card:hover{transform:translateY(-8px) rotate(-1.5deg);box-shadow:var(--sh),0 24px 50px #7c3aed66}
+.card:active{transform:scale(.97)}
+.card svg{width:84px;height:84px;margin-bottom:10px}
+.card b{display:block;font-size:24px}
+.card span{color:var(--mute);font-size:15px}
+#app{position:fixed;inset:0;display:none;flex-direction:column;background:linear-gradient(135deg,var(--bg),var(--bg2))}
+#app.on{display:flex;animation:in .5s ease}
+@keyframes in{from{opacity:0;transform:scale(.96)}}
+.top{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--bar);backdrop-filter:var(--gl);-webkit-backdrop-filter:var(--gl);border-bottom:1px solid var(--edge);box-shadow:var(--sh)}
+.top .sp{flex:1}
+.pill{padding:7px 14px;border-radius:99px;background:var(--card);backdrop-filter:var(--gl);-webkit-backdrop-filter:var(--gl);box-shadow:var(--sh);border:1px solid var(--edge);font-weight:600;transition:transform .15s,background .2s}
+.pill:hover{background:linear-gradient(135deg,#8b5cf6,#c026d3);color:#fff;transform:translateY(-2px)}
+.pill[disabled]{opacity:.35;pointer-events:none}
+.pg{font-weight:600;min-width:64px;text-align:center}
+#stage{flex:1;position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:10px}
+#sheet{position:relative;box-shadow:0 10px 40px #0003;border-radius:6px;overflow:hidden;background:var(--sb,#fff);transition:background .4s}
+#sheet canvas{position:absolute;inset:0;width:100%;height:100%}
+#dc{touch-action:none;cursor:crosshair}
+.tools{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:center;padding:8px 10px calc(8px + env(safe-area-inset-bottom,0px));background:var(--bar);backdrop-filter:var(--gl);-webkit-backdrop-filter:var(--gl);box-shadow:var(--sh);border-top:1px solid var(--edge);animation:up .6s .1s both cubic-bezier(.2,1.2,.4,1)}
+@keyframes up{from{transform:translateY(100%)}}
+.tb{min-width:44px;height:44px;padding:0 6px;border-radius:14px;display:grid;place-items:center;font-size:21px;transition:transform .2s cubic-bezier(.3,1.7,.5,1),background .2s}
+.tb:hover{transform:translateY(-4px) scale(1.1);background:#ffffff59}
+.tb.sel{background:linear-gradient(135deg,#8b5cf6,#c026d3);color:#fff;transform:translateY(-4px);box-shadow:inset 0 1px 1px #ffffffaa,0 6px 16px #a21caf66}
+.tb.txt{font-size:14px;font-weight:600;padding:0 12px;white-space:nowrap}
+.sep{width:1px;height:30px;background:var(--line);margin:0 4px}
+.sw{width:30px;height:30px;border-radius:50%;border:3px solid transparent;box-shadow:0 0 0 1px var(--line);transition:transform .2s cubic-bezier(.3,1.8,.5,1)}
+.sw:hover{transform:scale(1.25)}
+.sw.sel{transform:scale(1.3);border-color:var(--bg);box-shadow:0 0 0 3px var(--acc)}
+input[type=color]{width:34px;height:34px;border:0;padding:0;background:none;cursor:pointer;border-radius:50%}
+input[type=range]{width:90px;accent-color:var(--acc)}
+#ering{position:fixed;display:none;pointer-events:none;z-index:15;transform:translate(-50%,-50%);border:2px solid #7c3aed;background:#ffffff59;border-radius:50%;box-shadow:0 0 0 1px #fff9}
+#toast{position:fixed;top:calc(14px + env(safe-area-inset-top,0px));left:50%;transform:translate(-50%,-80px);background:var(--ink);color:var(--bg);padding:9px 20px;border-radius:99px;transition:transform .4s cubic-bezier(.3,1.6,.5,1);z-index:30}
+#toast.on{transform:translate(-50%,0)}
+/* focus mode: board fills everything, controls live behind a draggable dot */
+body.focus .top{display:none}
+body.focus #stage{padding:0}
+body.focus #sheet{border-radius:0;box-shadow:none}
+body.focus .tools{position:fixed;z-index:20;display:none;width:min(92vw,400px);background-color:#8b5cf633;border:1px solid var(--edge);border-radius:26px;box-shadow:var(--sh),0 18px 50px #2a0c5e66;animation:pop .25s cubic-bezier(.3,1.6,.5,1);padding:12px}
+body.focus .tools.open{display:flex}
+@keyframes pop{from{opacity:0;transform:scale(.85)}}
+#dot{display:none;position:fixed;z-index:25;width:58px;height:58px;border-radius:50%;touch-action:none;cursor:grab;background:conic-gradient(#a855f7,#6d28d9,#e879f9,#7c3aed,#c026d3,#a855f7);box-shadow:0 8px 24px #4c1d9580;animation:glow 3s ease-in-out infinite alternate}
+#dot::after{content:"";position:absolute;inset:7px;border-radius:50%;background:var(--bar);backdrop-filter:var(--gl);-webkit-backdrop-filter:var(--gl);border:1px solid var(--edge);box-shadow:inset 0 1px 2px #fffa}
+#dot i{position:absolute;inset:0;z-index:1;display:grid;place-items:center;font-style:normal;font-size:20px}
+body.focus #dot{display:block}
+@keyframes glow{to{box-shadow:0 8px 38px #c026d3b3}}
+#dot:active{cursor:grabbing;transform:scale(1.1)}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+.gate{position:fixed;inset:0;z-index:40;display:none;align-items:center;justify-content:center;padding:20px;overflow:auto;background:linear-gradient(135deg,var(--bg),var(--bg2))}
+.gate.on{display:flex}
+.gcard{position:relative;width:min(440px,100%);padding:30px 24px;border-radius:34px;text-align:center;background:var(--card);backdrop-filter:var(--gl);-webkit-backdrop-filter:var(--gl);border:1px solid var(--edge);box-shadow:var(--sh),0 24px 60px #4c1d9540}
+.gcard h1{font-size:clamp(34px,10vw,52px);margin:0 0 6px}
+.gcard p{margin:6px 0;color:var(--mute)}
+.chips{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin:12px 0}
+.chips span{padding:4px 12px;border-radius:99px;font-size:13px;font-weight:600;background:#ffffff40;border:1px solid var(--edge)}
+#gcode{width:100%;padding:14px;margin:8px 0;border-radius:18px;border:1px solid var(--edge);background:#ffffff59;color:var(--ink);font:inherit;font-size:22px;font-weight:600;text-align:center;letter-spacing:3px;text-transform:uppercase;box-shadow:inset 0 2px 6px #4c1d9526}
+#gcode.bad{animation:shake .4s}
+@keyframes shake{25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
+#gerr{min-height:22px;color:#e11d48;font-weight:600;font-size:14px}
+.go{width:100%;padding:13px;border-radius:18px;font-size:18px;font-weight:800;color:#fff;background:linear-gradient(135deg,#8b5cf6,#c026d3);box-shadow:inset 0 1px 1px #ffffffaa,0 10px 24px #a21caf55;transition:transform .2s cubic-bezier(.3,1.6,.5,1)}
+.go:hover{transform:translateY(-3px)}
+.buy{margin-top:18px;padding-top:14px;border-top:1px solid var(--line)}
+.crow{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;margin:8px 0}
+.crow b{font-size:18px;letter-spacing:1px;direction:ltr}
+a.pill{text-decoration:none;color:inherit;display:inline-block;font-size:14px}
+#licH{position:absolute;top:calc(10px + env(safe-area-inset-top,0px));right:12px;font-size:13px;display:none}
+#licH:not(:empty){display:block}
+body.focus #licT{display:none}
+
+.gate{align-items:flex-start}
+.wrap{position:relative;margin:auto;width:min(980px,100%);text-align:center;padding:14px 0 34px}
+.lead{margin:8px 0 14px;color:var(--mute);font-size:18px}
+.small{margin:6px 0 0;color:var(--mute);font-size:14px}
+#gnote{color:#e11d48;font-weight:600;margin:4px 0}
+.trial{display:block;max-width:420px;margin:12px auto 0;font-size:20px}
+.codebox{display:flex;gap:8px;max-width:440px;margin:18px auto 0}
+.codebox #gcode{margin:0;font-size:17px;letter-spacing:1px;text-transform:uppercase}
+.codebox .go{width:auto;padding:0 20px;font-size:16px;white-space:nowrap}
+.plans{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:18px;margin-top:34px}
+.plan{position:relative;padding:26px 18px 20px;border-radius:30px;background:var(--card);backdrop-filter:var(--gl);-webkit-backdrop-filter:var(--gl);border:1px solid var(--edge);box-shadow:var(--sh)}
+.plan.best{outline:2px solid #c026d3;outline-offset:2px}
+.plan h2{margin:0;font-size:22px}
+.price{font-size:44px;font-weight:800;line-height:1.15;background:linear-gradient(135deg,#5b21b6,#c026d3);-webkit-background-clip:text;background-clip:text;color:transparent}
+.plan small{display:block;color:var(--mute)}
+.plan ul{list-style:none;padding:0;margin:12px 0;color:var(--mute);font-size:14px;line-height:1.8}
+.plan .buy{margin-top:14px;padding-top:12px}
+.plan .buy p{margin:0 0 4px;font-weight:600}
+.badge{position:absolute;top:-13px;left:50%;transform:translateX(-50%);padding:3px 14px;border-radius:99px;background:linear-gradient(135deg,#8b5cf6,#c026d3);color:#fff;font-size:12px;font-weight:800;white-space:nowrap}
+</style>
+</head>
+<body>
+<div id="gate" class="gate on">
+  <div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div>
+  <div class="wrap">
+    <h1>W7 PDF Reader and Editor</h1>
+    <p class="lead">Draw, write and annotate on a whiteboard or on any PDF.</p>
+    <div id="gnote" role="status"></div>
+    <button class="go trial" id="gtrial">Start free trial · 1 hour</button>
+    <p class="small">One free hour per device. No code needed.</p>
+    <div class="codebox"><input id="gcode" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Have a code? M7XXXXXXX" aria-label="Access code" maxlength="20"><button class="go" id="ggo">Activate</button></div>
+    <div id="gerr" role="alert"></div>
+    <div class="plans">
+      <div class="plan">
+        <h2>Weekly</h2><div class="price">100 EGP</div><small>per week</small>
+        <ul><li>7 days of full access</li><li>Whiteboard + PDF annotation</li><li>All tools, zoom and full-screen mode</li></ul>
+        <div class="buy"><p>Get your code</p><div class="crow"><b>01064286973</b><a class="pill" href="https://wa.me/201064286973?text=Hi%2C%20I%20want%20the%20Weekly%20plan%20for%20W7%20PDF%20Reader%20and%20Editor" target="_blank" rel="noopener">WhatsApp</a><a class="pill" href="tel:+201064286973">Call</a></div><div class="crow"><b>01205560052</b><a class="pill" href="https://wa.me/201205560052?text=Hi%2C%20I%20want%20the%20Weekly%20plan%20for%20W7%20PDF%20Reader%20and%20Editor" target="_blank" rel="noopener">WhatsApp</a><a class="pill" href="tel:+201205560052">Call</a></div></div></div>
+      <div class="plan">
+        <h2>Monthly</h2><div class="price">200 EGP</div><small>per month</small>
+        <ul><li>30 days of full access</li><li>Whiteboard + PDF annotation</li><li>All tools, zoom and full-screen mode</li></ul>
+        <div class="buy"><p>Get your code</p><div class="crow"><b>01064286973</b><a class="pill" href="https://wa.me/201064286973?text=Hi%2C%20I%20want%20the%20Monthly%20plan%20for%20W7%20PDF%20Reader%20and%20Editor" target="_blank" rel="noopener">WhatsApp</a><a class="pill" href="tel:+201064286973">Call</a></div><div class="crow"><b>01205560052</b><a class="pill" href="https://wa.me/201205560052?text=Hi%2C%20I%20want%20the%20Monthly%20plan%20for%20W7%20PDF%20Reader%20and%20Editor" target="_blank" rel="noopener">WhatsApp</a><a class="pill" href="tel:+201205560052">Call</a></div></div></div>
+      <div class="plan best"><span class="badge">Best value</span>
+        <h2>Yearly</h2><div class="price">500 EGP</div><small>per year</small>
+        <ul><li>365 days of full access</li><li>Whiteboard + PDF annotation</li><li>All tools, zoom and full-screen mode</li></ul>
+        <div class="buy"><p>Get your code</p><div class="crow"><b>01064286973</b><a class="pill" href="https://wa.me/201064286973?text=Hi%2C%20I%20want%20the%20Yearly%20plan%20for%20W7%20PDF%20Reader%20and%20Editor" target="_blank" rel="noopener">WhatsApp</a><a class="pill" href="tel:+201064286973">Call</a></div><div class="crow"><b>01205560052</b><a class="pill" href="https://wa.me/201205560052?text=Hi%2C%20I%20want%20the%20Yearly%20plan%20for%20W7%20PDF%20Reader%20and%20Editor" target="_blank" rel="noopener">WhatsApp</a><a class="pill" href="tel:+201205560052">Call</a></div></div></div>
+    </div>
+  </div>
+</div>
+<div id="home">
+  <span id="licH" class="pill"></span>
+  <div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div>
+  <h1>W7 PDF Reader and Editor</h1>
+  <p class="sub">Choose how you want to work</p>
+  <div class="cards">
+    <button class="card" id="cWb">
+      <svg viewBox="0 0 80 80"><rect x="8" y="12" width="64" height="44" rx="6" fill="#fff" stroke="#6d4aff" stroke-width="4"/><path d="M20 40c8-14 14 8 22-6s12 4 18-8" fill="none" stroke="#c026d3" stroke-width="4" stroke-linecap="round"/><path d="M28 56l-6 14M52 56l6 14" stroke="#6d4aff" stroke-width="4" stroke-linecap="round"/></svg>
+      <b>Whiteboard</b><span>A blank space to draw and write</span>
+    </button>
+    <button class="card" id="cPdf">
+      <svg viewBox="0 0 80 80"><path d="M18 8h30l16 16v48H18z" fill="#fff" stroke="#a855f7" stroke-width="4" stroke-linejoin="round"/><path d="M48 8v16h16" fill="none" stroke="#a855f7" stroke-width="4" stroke-linejoin="round"/><rect x="26" y="44" width="30" height="14" rx="4" fill="#c026d3"/><path d="M40 40V22m-7 7l7-7 7 7" stroke="#6d4aff" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <b>Upload PDF</b><span>Annotate on top of your pages</span>
+    </button>
+  </div>
+  <input type="file" id="file" accept="application/pdf" hidden>
+</div>
+
+<div id="app">
+  <div class="top">
+    <button class="pill" id="back">Back</button>
+    <span id="ttl" style="font-weight:800"></span>
+    <span class="sp"></span>
+    <span id="pdfc" style="display:none;align-items:center;gap:6px">
+      <button class="pill" id="pv">Prev</button><span class="pg" id="pg"></span><button class="pill" id="nx">Next</button>
+      <button class="pill" id="up">New file</button>
+    </span>
+    <span id="licT" style="font-size:13px;color:var(--mute)"></span>
+    <button class="pill" id="fs">Full screen</button>
+  </div>
+  <div id="stage"><div id="sheet"><canvas id="pc"></canvas><canvas id="dc"></canvas></div></div>
+  <div class="tools" id="tools"></div>
+</div>
+<button id="dot" aria-label="Open tools (drag to move)"><i>🎨</i></button>
+<div id="ering"></div>
+<div id="toast"></div>
+
+<script>
+const $=s=>document.querySelector(s);
+const COLORS=['#111111','#ffffff','#e11d48','#ff7a1a','#ffc53d','#22c55e','#0ea5a4','#2563eb','#6d4aff','#d946ef','#8b5a2b','#64748b'];
+const BGS=['#ffffff','#fff6d6','#e6f4ff','#1f3a2e','#111827'];
+const S={mode:null,tool:'pen',color:'#7c3aed',size:4,strokes:{},redo:{},key:'wb',pdf:null,page:1,W:0,H:0,cur:null,raf:0,focus:false,tok:0,esize:24,z:1,tx:0,ty:0};
+const dc=$('#dc'),ctx=dc.getContext('2d'),pc=$('#pc'),pctx=pc.getContext('2d'),sheet=$('#sheet'),stage=$('#stage'),tools=$('#tools'),dot=$('#dot');
+function toast(t){const e=$('#toast');e.textContent=t;e.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>e.classList.remove('on'),2400)}
+
+const TOOLS=[['pen','✏️','Pen'],['hl','🖍️','Highlighter'],['er','🧽','Eraser'],['line','╱','Line'],['rect','▭','Rectangle'],['ell','◯','Circle'],['hand','✋','Move page (pan)']];
+function sep(){return Object.assign(document.createElement('i'),{className:'sep'})}
+function btn(cls,txt,title,fn){const b=document.createElement('button');b.className=cls;b.textContent=txt;b.title=title;b.setAttribute('aria-label',title);b.onclick=fn;return b}
+function buildTools(){
+  tools.innerHTML='';ring();dc.style.cursor=S.tool==='hand'?'grab':'crosshair';
+  if(S.focus&&S.mode==='pdf'){
+    tools.append(btn('tb txt','‹ Prev','Previous page',()=>go(-1)));
+    const l=document.createElement('span');l.className='pg';l.textContent=S.page+' / '+S.pdf.numPages;tools.append(l);
+    tools.append(btn('tb txt','Next ›','Next page',()=>go(1)),sep());
+  }
+  TOOLS.forEach(([k,i,n])=>tools.append(btn('tb'+(S.tool===k?' sel':''),i,n,()=>{S.tool=k;buildTools()})));
+  tools.append(sep());
+  COLORS.forEach(c=>{const b=btn('sw'+(S.color===c?' sel':''),'','Color '+c,()=>{S.color=c;if(S.tool==='er')S.tool='pen';buildTools()});b.style.background=c;tools.append(b)});
+  const ci=document.createElement('input');ci.type='color';ci.value=S.color;ci.title='Custom color';ci.oninput=()=>{S.color=ci.value;if(S.tool==='er')S.tool='pen'};ci.onchange=buildTools;tools.append(ci);
+  tools.append(sep());
+  const er=S.tool==='er',r=document.createElement('input');r.type='range';r.min=er?4:1;r.max=er?150:40;r.value=er?S.esize:S.size;r.title=er?'Eraser size':'Thickness';r.setAttribute('aria-label',r.title);
+  r.oninput=()=>{if(er){S.esize=+r.value;ring()}else S.size=+r.value};
+  if(er){const l=document.createElement('span');l.className='pg';l.textContent='Eraser size';tools.append(l)}
+  tools.append(r);
+  tools.append(sep());
+  if(S.mode==='wb'){BGS.forEach(c=>{const b=btn('sw','','Board background',()=>sheet.style.setProperty('--sb',c));b.style.background=c;tools.append(b)});tools.append(sep())}
+  tools.append(...zoomBtns(),sep(),btn('tb','↶','Undo',undo),btn('tb','↷','Redo',redo),btn('tb txt','🗑️ Erase all','Erase everything on this page',clearPg));
+  if(S.focus)tools.append(sep(),btn('tb txt','Exit ✕','Exit full board',()=>setFocus(false)));
+}
+
+const list=()=>S.strokes[S.key]||(S.strokes[S.key]=[]);
+const rl=()=>S.redo[S.key]||(S.redo[S.key]=[]);
+function paint(){const d=Math.max(devicePixelRatio||1,2);ctx.setTransform(d,0,0,d,0,0);ctx.clearRect(0,0,S.W,S.H);const L=list();let st=0;L.forEach((x,i)=>{if(x.t==='clr')st=i+1});for(let i=st;i<L.length;i++)stroke(L[i])}
+function stroke(s){
+  const P=s.p.map(([x,y])=>[x*S.W,y*S.H]);if(!P.length)return;
+  let ext=0;for(const q of P)ext=Math.max(ext,Math.abs(q[0]-P[0][0]),Math.abs(q[1]-P[0][1]));
+  ctx.save();ctx.lineCap='round';ctx.lineJoin='round';ctx.lineWidth=s.w;ctx.strokeStyle=s.c;ctx.fillStyle=s.c;
+  if(s.t==='er'){ctx.globalCompositeOperation='destination-out';ctx.lineWidth=s.w}
+  if(s.t==='hl'){ctx.globalAlpha=.35;ctx.lineWidth=s.w*3.5;ctx.lineCap='butt'}
+  ctx.beginPath();const a=P[0],z=P[P.length-1];
+  if(['pen','hl','er'].includes(s.t)){
+    if(P.length===1||ext<2){ctx.arc(a[0],a[1],Math.max(ctx.lineWidth/2,1.6),0,7);ctx.fill()}
+    else{ctx.moveTo(a[0],a[1]);for(let i=1;i<P.length-1;i++){const m=[(P[i][0]+P[i+1][0])/2,(P[i][1]+P[i+1][1])/2];ctx.quadraticCurveTo(P[i][0],P[i][1],m[0],m[1])}ctx.lineTo(z[0],z[1]);ctx.stroke()}
+  }else if(s.t==='line'){ctx.moveTo(a[0],a[1]);ctx.lineTo(z[0],z[1]);ctx.stroke()}
+  else if(s.t==='rect')ctx.strokeRect(a[0],a[1],z[0]-a[0],z[1]-a[1]);
+  else if(s.t==='ell'){ctx.ellipse((a[0]+z[0])/2,(a[1]+z[1])/2,Math.abs(z[0]-a[0])/2,Math.abs(z[1]-a[1])/2,0,0,7);ctx.stroke()}
+  ctx.restore();
+}
+const sched=()=>{if(!S.raf)S.raf=requestAnimationFrame(()=>{S.raf=0;paint()})};
+function pt(e){const r=dc.getBoundingClientRect();return[(e.clientX-r.left)/r.width,(e.clientY-r.top)/r.height]}
+const ptrs=new Map();let gest=null,pan=null;
+function cen(){const r=stage.getBoundingClientRect();return[r.left+r.width/2,r.top+r.height/2]}
+function applyZ(){
+  const mx=Math.max((S.z*S.W-stage.clientWidth)/2,0)+60,my=Math.max((S.z*S.H-stage.clientHeight)/2,0)+60;
+  if(S.z<=1.001){S.z=1;S.tx=0;S.ty=0}else{S.tx=Math.max(-mx,Math.min(mx,S.tx));S.ty=Math.max(-my,Math.min(my,S.ty))}
+  sheet.style.transform=S.z===1?'':'translate('+S.tx+'px,'+S.ty+'px) scale('+S.z+')';
+  if(S.zb)S.zb.textContent=Math.round(S.z*100)+'%';
+}
+function zoomAt(z2,px,py){z2=Math.max(1,Math.min(6,z2));const[cx,cy]=cen(),k=z2/S.z;S.tx=px-cx-k*(px-cx-S.tx);S.ty=py-cy-k*(py-cy-S.ty);S.z=z2;applyZ()}
+function zoomBtns(){
+  const c=()=>cen();
+  const zb=btn('tb txt',Math.round(S.z*100)+'%','Reset zoom',()=>{S.z=1;applyZ()});S.zb=zb;
+  return[btn('tb','−','Zoom out',()=>{const[x,y]=c();zoomAt(S.z/1.3,x,y)}),zb,btn('tb','+','Zoom in',()=>{const[x,y]=c();zoomAt(S.z*1.3,x,y)})];
+}
+stage.addEventListener('wheel',e=>{if(!S.mode)return;e.preventDefault();zoomAt(S.z*Math.exp(-e.deltaY*(e.ctrlKey?0.01:0.0015)),e.clientX,e.clientY)},{passive:false});
+dc.addEventListener('pointerdown',e=>{
+  if(!S.mode)return;e.preventDefault();tools.classList.remove('open');dc.setPointerCapture(e.pointerId);
+  ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(ptrs.size>=2){
+    if(S.cur){const l=list(),i=l.indexOf(S.cur);if(i>-1)l.splice(i,1);S.cur=null;sched()}
+    pan=null;const[a,b]=[...ptrs.values()];
+    gest={d:Math.hypot(a.x-b.x,a.y-b.y)||1,mx:(a.x+b.x)/2,my:(a.y+b.y)/2,z:S.z,tx:S.tx,ty:S.ty};return;
+  }
+  if(S.tool==='hand'){pan={x:e.clientX,y:e.clientY,tx:S.tx,ty:S.ty};return}
+  S.cur={t:S.tool,c:S.color,w:(S.tool==='er'?S.esize:S.size)/S.z,p:[pt(e)]};list().push(S.cur);S.redo[S.key]=[];sched();
+});
+dc.addEventListener('pointermove',e=>{
+  if(ptrs.has(e.pointerId))ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(gest&&ptrs.size>=2){
+    const[a,b]=[...ptrs.values()],d=Math.hypot(a.x-b.x,a.y-b.y),mx=(a.x+b.x)/2,my=(a.y+b.y)/2,[cx,cy]=cen();
+    const z2=Math.max(1,Math.min(6,gest.z*d/gest.d)),k=z2/gest.z;
+    S.tx=mx-cx-k*(gest.mx-cx-gest.tx);S.ty=my-cy-k*(gest.my-cy-gest.ty);S.z=z2;applyZ();return;
+  }
+  if(pan){S.tx=pan.tx+e.clientX-pan.x;S.ty=pan.ty+e.clientY-pan.y;applyZ();return}
+  if(!S.cur)return;const p=pt(e);
+  if(['line','rect','ell'].includes(S.cur.t))S.cur.p=[S.cur.p[0],p];else S.cur.p.push(p);sched();
+});
+const end=e=>{ptrs.delete(e.pointerId);if(ptrs.size<2)gest=null;pan=null;S.cur=null};
+const ering=$('#ering');
+function ring(e){
+  if(S.tool!=='er'||!S.mode||(e&&e.pointerType==='touch'&&!S.cur)){ering.style.display='none';return}
+  if(e){ering.style.left=e.clientX+'px';ering.style.top=e.clientY+'px'}
+  if(!ering.style.left){ering.style.display='none';return}
+  ering.style.width=ering.style.height=S.esize+'px';ering.style.display='block';
+}
+dc.addEventListener('pointermove',ring);dc.addEventListener('pointerdown',ring);dc.addEventListener('pointerleave',()=>{ering.style.display='none'});
+dc.addEventListener('pointerup',end);dc.addEventListener('pointercancel',end);
+function undo(){const l=list();if(l.length){rl().push(l.pop());paint()}}
+function redo(){if(rl().length){list().push(rl().pop());paint()}}
+function clearPg(){const l=list();if(l.length&&l[l.length-1].t!=='clr'){l.push({t:'clr',p:[]});S.redo[S.key]=[];paint();toast('Erased all. Undo brings it back.')}}
+addEventListener('keydown',e=>{
+  if(!S.mode)return;
+  if((e.ctrlKey||e.metaKey)&&e.key==='z'){e.preventDefault();undo()}
+  if((e.ctrlKey||e.metaKey)&&e.key==='y'){e.preventDefault();redo()}
+  if(e.key==='Escape'&&S.focus)setFocus(false);
+  if(S.mode==='pdf'){if(e.key==='ArrowRight')go(1);if(e.key==='ArrowLeft')go(-1)}
+});
+
+/* layout + PDF render (render offscreen, then swap, so pages never overlap or distort) */
+async function layout(){
+  const tok=++S.tok,pad=S.focus?0:20;
+  const aw=stage.clientWidth-pad,ah=stage.clientHeight-pad;let w=aw,h=ah,pg=null,k=1;
+  if(S.mode==='pdf'&&S.pdf){
+    pg=await S.pdf.getPage(S.page);if(tok!==S.tok)return;
+    const v=pg.getViewport({scale:1});k=Math.min(aw/v.width,ah/v.height);w=Math.floor(v.width*k);h=Math.floor(v.height*k);
+  }
+  sheet.style.width=w+'px';sheet.style.height=h+'px';S.W=w;S.H=h;
+  const d=Math.max(devicePixelRatio||1,2);dc.width=Math.round(w*d);dc.height=Math.round(h*d);paint();
+  if(pg){
+    const q=Math.max(d,2),v=pg.getViewport({scale:k*q}),off=document.createElement('canvas');
+    off.width=Math.round(v.width);off.height=Math.round(v.height);
+    const oc=off.getContext('2d');oc.fillStyle='#fff';oc.fillRect(0,0,off.width,off.height);
+    try{await pg.render({canvasContext:oc,viewport:v}).promise}catch(e){return}
+    if(tok!==S.tok)return;
+    pc.width=off.width;pc.height=off.height;pctx.drawImage(off,0,0);
+  }
+}
+addEventListener('resize',()=>{if(S.mode)layout()});
+
+function show(mode){
+  S.mode=mode;S.key=mode==='wb'?'wb':'p'+S.page;
+  $('#home').classList.add('out');$('#app').classList.add('on');
+  $('#ttl').textContent=mode==='wb'?'Whiteboard':'PDF';
+  $('#pdfc').style.display=mode==='pdf'?'flex':'none';
+  pc.style.display=mode==='pdf'?'block':'none';
+  sheet.style.setProperty('--sb','#fff');
+  S.z=1;applyZ();buildTools();layout();updPg();
+}
+function updPg(){if(S.pdf){$('#pg').textContent=S.page+' / '+S.pdf.numPages;$('#pv').disabled=S.page<=1;$('#nx').disabled=S.page>=S.pdf.numPages}}
+function go(d){
+  if(!S.pdf)return;const n=S.page+d;if(n<1||n>S.pdf.numPages)return;
+  S.page=n;S.key='p'+n;S.z=1;applyZ();sheet.animate([{opacity:.2,transform:'translateX('+(d*30)+'px)'},{opacity:1,transform:'none'}],{duration:320,easing:'ease-out'});
+  layout();updPg();buildTools();if(S.focus)tools.classList.add('open');
+}
+$('#nx').onclick=()=>go(1);$('#pv').onclick=()=>go(-1);
+
+async function loadPdf(f){
+  if(!f||(f.type!=='application/pdf'&&!/\.pdf$/i.test(f.name))){toast('Please choose a PDF file');return}
+  try{
+    toast('Opening file…');
+    pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    S.pdf=await pdfjsLib.getDocument({data:await f.arrayBuffer(),useSystemFonts:true,isEvalSupported:false}).promise;
+    S.page=1;S.strokes={};S.redo={};show('pdf');$('#ttl').textContent=f.name.slice(0,28);
+  }catch(e){toast('Could not open this file. Try another PDF.')}
+}
+$('#cWb').onclick=()=>show('wb');
+$('#cPdf').onclick=()=>$('#file').click();
+$('#up').onclick=()=>$('#file').click();
+$('#file').onchange=e=>{loadPdf(e.target.files[0]);e.target.value=''};
+addEventListener('dragover',e=>e.preventDefault());
+addEventListener('drop',e=>{e.preventDefault();loadPdf(e.dataTransfer.files[0])});
+$('#back').onclick=()=>{setFocus(false);S.mode=null;$('#app').classList.remove('on');$('#home').classList.remove('out');S.strokes={};S.redo={}};
+
+/* focus mode + draggable dot */
+function setFocus(on){
+  S.focus=on;document.body.classList.toggle('focus',on);tools.classList.remove('open');
+  if(on){dot.style.left=(innerWidth-78)+'px';dot.style.top=(innerHeight-90)+'px';try{document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen().catch(()=>{})}catch(e){}}
+  else if(document.fullscreenElement)document.exitFullscreen().catch(()=>{});
+  buildTools();setTimeout(layout,60);
+}
+$('#fs').onclick=()=>setFocus(true);
+document.addEventListener('fullscreenchange',()=>{if(!document.fullscreenElement&&S.focus)setFocus(false)});
+function place(){
+  const r=dot.getBoundingClientRect(),w=tools.offsetWidth,h=tools.offsetHeight;
+  let x=Math.min(Math.max(8,r.left+r.width/2-w/2),innerWidth-w-8);
+  let y=r.top>innerHeight/2?r.top-h-12:r.bottom+12;y=Math.min(Math.max(8,y),innerHeight-h-8);
+  tools.style.left=x+'px';tools.style.top=y+'px';
+}
+let drag=null;
+dot.addEventListener('pointerdown',e=>{dot.setPointerCapture(e.pointerId);const r=dot.getBoundingClientRect();drag={dx:e.clientX-r.left,dy:e.clientY-r.top,sx:e.clientX,sy:e.clientY,moved:false}});
+dot.addEventListener('pointermove',e=>{
+  if(!drag)return;
+  if(Math.abs(e.clientX-drag.sx)+Math.abs(e.clientY-drag.sy)>6)drag.moved=true;
+  if(drag.moved){dot.style.left=Math.min(Math.max(0,e.clientX-drag.dx),innerWidth-58)+'px';dot.style.top=Math.min(Math.max(0,e.clientY-drag.dy),innerHeight-58)+'px';if(tools.classList.contains('open'))place()}
+});
+dot.addEventListener('pointerup',()=>{
+  if(drag&&!drag.moved){tools.classList.toggle('open');if(tools.classList.contains('open')){buildTools();place()}}
+  drag=null;
+});
+
+/* access gate */
+(()=>{
+const SALT="m7-69ac7a982d5f",H={"ca3b5a69e9dd3752fde3118fc2b1f64b8871dd55db9af4ae895aee9b7b1753b1": "w", "8074ec3c2374d94936279dabc025a053bdda589e7c2c31d01f897333c50cb5e6": "w", "eb9abc2c36a50d0da4022c6f57c9b306ebf0914126c0c45689b2f8a73f6b8582": "w", "e84a4c9fab728bb67458558f396defd85d5d617dc23afbd1e6953a436cca579a": "w", "b5bbb91168d1f21bf17dd5d29676f624d5bcc65dc1fbbf4d56e1b0280cdd3214": "w", "fe666d8a91644fef96ee7096c108392b0de14ba934c8f6cc14f792c9d8f5557f": "w", "defcb42a4cf9df9a825b19c5988e893d1443049403597e6d4cd0a487d33ab9f3": "w", "c74999c2d7c1ffea1cf457d2523272a727df6b218472177359dab011a0804bbe": "w", "ba145b86369b396abcb337c80e6b8aa5cd5a7094eb5a93afe0bf78cbef0c0986": "w", "27e2ad1e3f0b4d221562f6323aa3963a5284204f424b100589c7fc81ea90b95e": "w", "3bc24e717465fd2ebba19b64df8b979895a9bf56705a5cbb7ad2a88386c27c55": "w", "4cb0dd8c5fb6390218a650e0a6baf650754478afb6410a4cf15e56747374f13a": "w", "ce6617be60d8c683c4e110498ab58c8b06179fd49092f2e0553644b31c8b7819": "w", "a0bcb8370a93004d802537dd1956902f9ae812103dca67de1ecfec8b4c14829a": "w", "99938dcfb49c325fd77274309fde2974aada5794fa6fc9e901c9fb3c123b7eda": "w", "2879a0787445d818487f71f137f2216560c3dd99bd1adc423a551ab23dd49d8d": "w", "f2830525bf1875734bb127e3d046609cfe9d574601b6698bb4d57837160218eb": "w", "e0008c5db523ee8c79488f91fe6bb86d0f7ebf31dea910c0cebcfcf10cd41d08": "w", "37bb791ca30e347be4a71c941acd9f3fba7fc0a6a6c741f2d5c29f443fef0960": "w", "567bf011bc5d44ce04337bd9a69aec02d56124d0eda239067b440371c03b82f5": "w", "4a6e8255f3f47eb706c6c71e1abb228d68cd71ab001d153bb3ee395ed8b61021": "w", "781b6d26fbd410430fa20d97f1865e1cf3c8574b27a686e08a1bfa0aa3c57161": "w", "4ca1c5f37e870079f789bfdfc6fd3eedea837979eb06561278f7b80632d8c9ae": "w", "cd7dba2da43b1e5c77bf977c4f7db945a028dfe2d44e13f8fcbfdafeed88de78": "w", "f65d4ce70716afa2600c7be7d420489042b970e9625fc61e3995d8b9303fb16a": "w", "592616f6c61493c7f1144a145ef6ed14e628d110582992fe4355ffdd9c53ce28": "w", "0eff725cc4c6218dad8362897b7214d8726dcc05218602fe758aa9cb741c1e3a": "w", "e6b4b9d589aaaf88d88b9681ad222fe208abb61b5dcfee6350c8c890aed2e015": "w", "aafc5892ffe1ffcd70cda1e587b7d6ccd72524b1bca44ae795c6bece4a316720": "w", "388b0c3447048b10fd5d4963195c5ca04b7c3a730119f2c22ba868a6306653ac": "w", "749291e918f4c8f2466d649b26d498ce4f58cee1bf11312dffa99d55f985022f": "w", "b7be2c955cc1f31ab91b44a5cd67cc8e700c2ca30807f93ead2ef52a0ccfe0e9": "w", "0e5682d66c034dc6d667aebde5ba9628d145af8e56774ffe639623952a085eda": "w", "813cd3fee9c8c881657d59b80873f28238e66da52f1a5b6bc88914e73acca222": "w", "3940745f5edb05c0e4400441fdf981dfee36c3f644deca0b46144e3e4fbe7ae1": "w", "ce8603354a28f3afcede7c433b1f709191a1f1430030bedccd56f3ce1685ba95": "w", "c3659fc94f730b951b1ee2a183ed82703f064a74b2610223199a640559f34243": "w", "af64966b6429a77b55b776abd4d22fcbd070e9f78670d7c708b4574d80bc064e": "w", "b6e4a06a84ad60be389a0d4f8262a2bafdceca200871a885a8e24e96755a86cb": "w", "137c84e5aa7ff826481b25217af1bcf97d646874373945a304b45e377daf066d": "w", "400f923bc257c4ef5d9598bf2464f70b366c4631ced20079eb4ad7ac0a9c76a0": "w", "2ffcda987abbe0cd4a762c9d2e73fa666659a6421d1dc6bc0ee5f30b2408cc21": "w", "1eb6cb18380fe6be137767a98aeb023298004e934ff110ed41b9f2b02b5f2fc0": "w", "90c125338347dd299e8a04eff7f9dd76a44108fc20d4f8e0ad88c67fd2af90e5": "w", "68c06a4eddc11d7391a55059f1cfc46cd6111f5c8df41d986e4bbf1f7fc97fc5": "w", "c16ad900f812d5634b9e3f094db7d56824c1548821a0277410fdda9edaa52d82": "w", "9e625614f71233f702793b05109652d6102bb9ceeadc828ad35add3c41cbde0f": "w", "af4aba586c6497227a0a03714a97b8152f2cf18b127c7679fe9b09445febc2c6": "w", "f47b3e390a020e9a98b31a15f37145aa9ae50f5eb8d496208d810ae60ef946b8": "w", "b10693b2f022f9bd48328f6e9f61ecdefefafdfb2920d05c16b5702ca9ce8fbf": "w", "d48f4e7d1cd16ce32fffd9e8bbeb0e07903f3d8e44e0fef5d12bcedd2935cfdc": "m", "6e73e545f9e42c70ca56b1dfbcb2708be27cdcbc9101cc761a0630ef4394efd8": "m", "77a1f25f15a9989f70302d0fc0499513d2234c34c020576e554d14b2a14323ba": "m", "5b522caeaeafeb5f6c4c45e820d3b7ff57a9bc94a06e92e53f656acbbc2cae15": "m", "a4f197b899066c42ed6fc0955ee6b47c902d008bfc0daafd3648cad693430835": "m", "c6c2725c7d947cbcef6b65505c177585656cfc48b0fd344e3e2a38de2589f870": "m", "b00674e613e01249b648aef9409ab3c6d6db91fd12d064989f4800a85a5c12b4": "m", "86e7585d5f48f324f5ea8d21058ad81301671ff27513ca936ce43d508cfa259b": "m", "40bc774c4506c26370679d20007b781a61797f42a6df2de97e5416ce2190876c": "m", "6a18d8e57c220351c3407eda26fb4d59b71eb627f41df0a72ae82da6a63f39d1": "m", "32bd99bf4371a35221218a220cbf9ec7bfd4f19e36aaa4d6dab40f108d128867": "m", "15393f32e1b3afa916a8df3dc868f7585a93bfdcbb23e1247bbeabbb75dbe3ff": "m", "260380ea67f43ff0a254d9f7fa0815b62767addeed36b3e7e34e2951863dd64f": "m", "d4ac38da0feec5ee79d48c7727dfc310f01c7d36463b0df8e024a708a807f847": "m", "0fd49c339008c2edccd6250aba6b61d9f678caf19f0bad009d0e723c82dedd1a": "m", "67b752dc881a7ac5af4c9c86e1299a6d3f309deacbf16e62604cbef775159619": "m", "ee2fad2457e1328c556c34d10a5037c54d59a6d67b8545f60362d209a9d7cb1e": "m", "da59485b59589d508d9bbc3bad9a9cafac71a178329e7aed2883b77cdc90cdd0": "m", "42352317c5e66fc1b222b7282cd374f8ea006512bbf1b1260e402c986aa786af": "m", "2e5195cf97e94ed0f3499edc4eafaa3aa49606b229fa920404211529b28a0b72": "m", "4f27ab296519198643981ecc8ce66aa96282fddedcc5c6cc4552e6ceea459f49": "m", "26ca67c3cd435e4535ba13b27a222913523250d67e4091f7f44e1aee9bb3257a": "m", "0ac527df104b2e77fcdf23f5fcde69f00f55a69df84082d9141b3c62e812636b": "m", "66305d4e092f1369e1db2d585855154b42274e373dea6431ec60645cde11d901": "m", "5d7f573c1e2c73f4fe98fa04a2070d0a47d07a34b67a7c3eeb050049dd40bfe6": "m", "db7cc8e3b9e877da4d40cbbb48f84e66a32f8d27d6fa10ef4ab1be07a0438e13": "m", "3b9fd263dd0e24f5014ef18e467cdea1732deb104f016789b02b0e6879f3d608": "m", "8ec85df2018f441927474a5ff902efd00e6988dd26f1d3b0c13f6b59597c3a82": "m", "82761ac94917e654f57fb87e61eaeafcae34e7a5ce23c58782860a3b53fef4ee": "m", "e59b353bf94a0cd40d292c37fd6df9b06f8fd5df3b82ff9c8f42f65287ea42bd": "m", "b601f9fa8164fd0b208e3880ffda1a5663a2d34d30c4050f3ddcd6a593dcebaa": "m", "ca75d1f1361e02344d57ca42279278b1ebb8628dc80011e04075ad25a28a5b6a": "m", "6de67ec5e2b10ed18c60169a3dd69955cf8f792464eb5c5200cc9b4bfb7ad1a7": "m", "775ed59a8ed01dc29d246458456cef537604d53731ce773030b5fd0b776afb44": "m", "09d4c80a674e29b12a543bc73b339a2fa4170b9e6cff8c8c7117f94b759f4150": "m", "4b01e2394b600e3e39a17f0d09fb42270f9f4ddf3919ef18fc04fb5b5850d8e4": "m", "e88480a57178d3a5b5d5881cb0406f33faf2e2bf26563493de8be0ebd7971e6b": "m", "34a85e477d094bb84d9535f8b59cd29a834d4559c4d8b8e210d6ef3a66dd998d": "m", "644ead7b61d8e7356089568469c031b481ee95a9c396a176348673078e385be6": "m", "4edd97cc7aa8ec728332dda30a1a324ef3dc3c42c6b4aa222cea24ae5d302a72": "m", "da92531fc781b5be01c15c140746fe7be4c4bd3859ac8f900dda29d9c1a021ff": "m", "4b5ec105d5eede02cb90cfa3584040a6c4f9c97f8ca0c4a958e9ac6129031f8e": "m", "3cf05c80a4ffd1376b24948baae2670a4858bff6e266f9a33e3dea077f9795fe": "m", "6dad6788d1f630e75b1a78197cf4a8c3f39db8ce5df88db0ee6443e2021de32e": "m", "dc5beb3c68988cf4422f9b3d313861bacafca0446b4f6586c232f88e7303c31f": "m", "6c15f0361c708f3a5036a260f9fb8be9a640ba07d95a194a6bd13f6171bbba4c": "m", "7c319e6c148609734b9c729082843739e9d6f235ffa048eab07303b52aaa59ff": "m", "1628456e08f5c03d4e19528cf717405a00b2ce9b5575f3b05533c5010fe02672": "m", "0ac6c14db5e413fa3eebc6eec9e717ced2cb9a16a58df917431c29ad90bc30b7": "m", "a52c440516868ed56bc21f67c72fa61e15497e8844bb446d5c92dc924d76c1d1": "m", "99623ce412ffbeadeb23bf12616ac36dfc7861329a0c4e13cdfc31619f75c6d7": "y", "1003266fed74e3fc1e348e78ea7364f38bea240857ef946b863a89bfb746d95a": "y", "df3c4c6ceb1349bc4be00046f05aa3c77b5933a144eb6d4f513314a900a0d211": "y", "96afe4a719c5a45a24a9aaaeb90c3195e8c0fdd0a62943a5b6e302dab7caffb3": "y", "1ffd35e78de4223b673cb61dd505ba8a537844a6ed8df344512eb391c2cd781a": "y", "f5cc6f0adbdefea8d6bdf4e45603ce313e559918f425b07176f142147e2f69cc": "y", "3c32c810d8aa42f2b2c88e53f1dad1b8cc1e81c10c47b5aae10855610dd1737b": "y", "db51967f8d99b3402946c94312e568d11758af21b3cbbb38c27889a6ea3e9a39": "y", "9a34feff92b5f986fc7a6f166e4e3fa6f343783630e8ede765e42fd1d9c8d6f9": "y", "c9ec3407060b8cebcfeb7b499bf9c5c544e6fc2d713eb79a959581748d8d4a8b": "y", "ab06f54df0851c33fc033ec70ccc919a00c0440c37322cf93189298758a37f4f": "y", "d4b07a81aa85bed970c3d65f785119c7ccd660584212d351cd4a11f86cc05c1b": "y", "d03b89d92332d8dcfbc4e281ff99dc3870fc6ecd2baa8ab370877fb859e39335": "y", "13315b662dab8f94a74f15ac29a9f3969a71cb3e5286df687ec69b9d25ea39b4": "y", "9211eb5d8e9a86820492ca2e54df36786f8359b0d2349548b2d04479537cce30": "y", "7ab883377226c37e34ff65338610bc8cd7f4fdab60af7daad87bcb5c0231365a": "y", "705958a38996bf7bc2a1405f98c0b44f9bce6bf05c538191dd5c2c0b513e4cfd": "y", "c7a4962f2240c858fd1cd590b2ba552ce207a8e4af6962633b96f9cbb8e100cb": "y", "62c87f1b6fa1054f8e96738600a07a2d22aaa6aaa73fb9a689748894bc53d487": "y", "bce0b3ff8b7be236645ab93ea541dbd4021ac059c5379086e11b416b59423eff": "y"};
+const DUR={w:6048e5,m:2592e6,y:31536e6},NAME={t:'Free trial',w:'Weekly',m:'Monthly',y:'Yearly'};
+const gate=$('#gate'),gin=$('#gcode'),gerr=$('#gerr');
+/* ===== FIREBASE: paste your firebaseConfig object here (between the braces) instead of null ===== */
+const FIREBASE_CONFIG={apiKey:"AIzaSyCMc19_KKh4ctkdZIkdlGVKGR5Qe7xBn5g",authDomain:"supermath-f4b2b.firebaseapp.com",projectId:"supermath-f4b2b",storageBucket:"supermath-f4b2b.firebasestorage.app",messagingSenderId:"956259608945",appId:"1:956259608945:web:bd5dcd4f3ded25b02aeed0"};
+/* ================================================================================================== */
+let db=null;
+try{if(FIREBASE_CONFIG&&window.firebase){firebase.initializeApp(FIREBASE_CONFIG);db=firebase.firestore()}}catch(e){db=null}
+let tries=0,lockUntil=0,lic=null;
+const ls={get(k){try{return JSON.parse(localStorage.getItem(k)||'null')}catch(e){return null}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+function sha256js(str){
+  const m=new TextEncoder().encode(str),K=[],R=(x,n)=>(x>>>n)|(x<<(32-n));
+  let p=2;for(let c=0;c<64;p++){let ok=1;for(let d=2;d*d<=p;d++)if(p%d===0){ok=0;break}if(ok){K[c++]=(Math.pow(p,1/3)%1)*4294967296|0}}
+  const hh=[];p=2;for(let c=0;c<8;p++){let ok=1;for(let d=2;d*d<=p;d++)if(p%d===0){ok=0;break}if(ok){hh[c++]=(Math.pow(p,.5)%1)*4294967296|0}}
+  const l=m.length,n=((l+9+63)>>6)<<6,b=new Uint8Array(n);b.set(m);b[l]=128;
+  const dv=new DataView(b.buffer);dv.setUint32(n-8,Math.floor(l*8/4294967296));dv.setUint32(n-4,(l*8)>>>0);
+  for(let i=0;i<n;i+=64){
+    const w=new Array(64);for(let j=0;j<16;j++)w[j]=dv.getUint32(i+j*4);
+    for(let j=16;j<64;j++){const s0=R(w[j-15],7)^R(w[j-15],18)^(w[j-15]>>>3),s1=R(w[j-2],17)^R(w[j-2],19)^(w[j-2]>>>10);w[j]=(w[j-16]+s0+w[j-7]+s1)|0}
+    let[a,b2,c,d,e,f,g,h]=hh;
+    for(let j=0;j<64;j++){
+      const S1=R(e,6)^R(e,11)^R(e,25),ch=(e&f)^(~e&g),t1=(h+S1+ch+K[j]+w[j])|0,S0=R(a,2)^R(a,13)^R(a,22),mj=(a&b2)^(a&c)^(b2&c),t2=(S0+mj)|0;
+      h=g;g=f;f=e;e=(d+t1)|0;d=c;c=b2;b2=a;a=(t1+t2)|0;
+    }
+    const v=[a,b2,c,d,e,f,g,h];for(let j=0;j<8;j++)hh[j]=(hh[j]+v[j])|0;
+  }
+  return hh.map(x=>(x>>>0).toString(16).padStart(8,'0')).join('');
+}
+async function sha(t){
+  try{if(window.crypto&&crypto.subtle){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(t));return[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')}}catch(e){}
+  return sha256js(t);
+}
+function left(ms){const m=Math.ceil(ms/6e4);if(m>=1440)return Math.floor(m/1440)+'d '+Math.floor(m%1440/60)+'h';if(m>=60)return Math.floor(m/60)+'h '+m%60+'m';return m+'m'}
+function show(msg){gate.classList.add('on');$('#gnote').textContent=msg||'';gate.scrollTop=0}
+function unlock(){gate.classList.remove('on');gerr.textContent='';tick()}
+function tick(){
+  if(!lic)return;const r=lic.exp-Date.now();
+  if(r<=0){const tr=lic.t==='t';lic=null;ls.set('w7_lic',null);try{$('#back').click()}catch(e){}$('#licH').textContent='';$('#licT').textContent='';show(tr?'Your free hour has ended. Choose a plan below to keep going.':'Your plan has ended. Choose a plan below to renew.');return}
+  const t=NAME[lic.t]+' · '+left(r)+' left';$('#licH').textContent=t;$('#licT').textContent=t;
+}
+function startTrial(){
+  const now=Date.now(),tr=ls.get('w7_trial');
+  if(tr&&tr<=now){$('#gnote').textContent='The free hour was already used on this device. Choose a plan below.';return}
+  const exp=tr||now+36e5;if(!tr)ls.set('w7_trial',exp);
+  lic={h:'trial',t:'t',exp};ls.set('w7_lic',lic);unlock();
+}
+async function submit(){
+  const now=Date.now();if(now<lockUntil){gerr.textContent='Too many tries. Wait '+Math.ceil((lockUntil-now)/1000)+'s.';return}
+  const c=gin.value.trim().toUpperCase().replace(/\s+/g,'');if(!c)return;
+  let h;try{h=await sha(SALT+c)}catch(e){gerr.textContent='This browser cannot verify codes.';return}
+  const t=H[h];
+  if(!t){tries++;gin.classList.remove('bad');void gin.offsetWidth;gin.classList.add('bad');if(tries>=5){lockUntil=now+6e4;tries=0;gerr.textContent='Too many tries. Wait 60s.'}else gerr.textContent='Invalid code. Check it and try again.';return}
+  const exp=now+DUR[t];
+  if(db){
+    /* one-time use: the doc id is the code hash; create succeeds only the first time (rules block any update) */
+    $('#ggo').disabled=true;
+    try{await db.collection('used').doc(h).set({t,at:now,exp})}
+    catch(e){
+      $('#ggo').disabled=false;
+      if(e&&e.code==='permission-denied')gerr.textContent='This code was already used. Ask for a new one.';
+      else gerr.textContent='Connection problem. Check your internet and try again.';
+      return;
+    }
+    $('#ggo').disabled=false;
+  }else{
+    const used=ls.get('w7_used')||{};
+    if(used[h]){gerr.textContent='This code was already used on this device.';return}
+    used[h]=exp;ls.set('w7_used',used);
+  }
+  lic={h,t,exp};ls.set('w7_lic',lic);tries=0;gin.value='';unlock();
+}
+$('#ggo').onclick=submit;$('#gtrial').onclick=startTrial;gin.addEventListener('keydown',e=>{if(e.key==='Enter')submit()});
+const saved=ls.get('w7_lic');
+if(saved&&saved.exp>Date.now()&&(saved.t==='t'||H[saved.h]===saved.t)){lic=saved;unlock()}
+else show(saved?'Your access has ended. Choose a plan below.':'');
+setInterval(tick,15000);
+})();
+</script>
+</body>
+</html>
